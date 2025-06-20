@@ -98,6 +98,52 @@ class CoffeeShopApp:
             pass
         # Start with the login screen; on success, the main screen is created.
         self.show_login_screen()
+        
+        # export to excel
+    def export_all_to_excel(self):
+        if not EXCEL_AVAILABLE:
+            messagebox.showerror("خطأ", "المكتبة المطلوبة لإنشاء ملف Excel (openpyxl) غير مثبتة.\nيرجى تشغيل الأمر: pip install openpyxl")
+            return
+
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            filetypes=[("Excel files", "*.xlsx")],
+            title="تصدير إلى Excel"
+        )
+        if not file_path:
+            return
+
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM customers ORDER BY id")
+        customers = cursor.fetchall()
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "العملاء والتوليفات"
+
+        headers = ["رقم العميل", "الاسم", "رقم التليفون", "الموظف", "التاريخ", "نوع التوليفة", "التفاصيل"]
+        ws.append(headers)
+        for cell in ws[1]:
+            cell.font = Font(bold=True)
+
+        for cust in customers:
+            cust_id, first, last, phone, employer = cust
+            full_name = f"{first} {last}"
+            cursor.execute("SELECT date, category, details FROM mixes WHERE customer_id = ?", (cust_id,))
+            mixes = cursor.fetchall()
+            if mixes:
+                for i, mix in enumerate(mixes):
+                    row = [cust_id if i == 0 else "", full_name if i == 0 else "", phone if i == 0 else "", employer if i == 0 else "",
+                           mix[0], mix[1], mix[2]]
+                    ws.append(row)
+            else:
+                ws.append([cust_id, full_name, phone, employer, "", "", ""])
+
+        conn.close()
+        wb.save(file_path)
+        messagebox.showinfo("نجاح", f"تم تصدير البيانات إلى الملف:\n{file_path}")
+
 
     # ------------- Login Screen ------------- #
     def show_login_screen(self):
@@ -712,6 +758,15 @@ class CoffeeShopApp:
         self.customer_mix_tree.column("category", width=100, anchor="center")
         self.customer_mix_tree.column("details", width=400, anchor="w")
         self.customer_mix_tree.pack(fill=tk.BOTH, expand=True)
+    
+
+            # Button to export to Excel
+        export_frame = tk.Frame(all_cust_win)
+        export_frame.pack(pady=5)
+        btn_export_excel = tk.Button(export_frame, text="📤 تصدير إلى Excel", font=("Arial", 12), command=self.export_all_to_excel)
+        btn_export_excel.pack(side=tk.RIGHT, padx=5)
+
+
 
     def load_all_customers(self):
         for child in self.all_customers_tree.get_children():
@@ -735,6 +790,9 @@ class CoffeeShopApp:
             return
         cust_id = selected[0]
         self.load_customer_mixes(cust_id)
+
+ # Button to export to Excel
+        
 
     def load_customer_mixes(self, cust_id):
         for child in self.customer_mix_tree.get_children():
